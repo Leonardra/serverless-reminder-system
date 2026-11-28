@@ -1,6 +1,6 @@
 terraform {
   required_providers {
-    aws     = { source = "hashicorp/aws", version = "~> 5.0" }
+    aws     = { source = "hashicorp/aws", version = "~> 6.0" }
     archive = { source = "hashicorp/archive" }
   }
   backend "s3" {
@@ -128,6 +128,14 @@ resource "aws_lambda_permission" "url" {
   function_name          = aws_lambda_function.http.function_name
   principal              = "*"
   function_url_auth_type = "NONE"
+}
+
+resource "aws_lambda_permission" "url_invoke" {
+  statement_id             = "public-url-invoke"
+  action                   = "lambda:InvokeFunction"
+  function_name            = aws_lambda_function.http.function_name
+  principal                = "*"
+  invoked_via_function_url = true
 }
 
 # ---------- Timer trigger ----------
