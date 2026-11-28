@@ -1,0 +1,36 @@
+name: deploy-functions
+on:
+  pull_request:
+    paths: ["functions/**", ".github/workflows/deploy-functions.yml"]
+  push:
+    branches: [main]
+    paths: ["functions/**", ".github/workflows/deploy-functions.yml"]
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Python syntax
+        run: python -m py_compile functions/*/app.py
+
+      - if: github.event_name == 'push'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-north-1
+
+      - if: github.event_name == 'push'
+        name: Deploy each function
+        run: |
+          for dir in functions/*/; do
+            fn=$(basename "$dir")
+            (cd "$dir" && zip -r "../../$fn.zip" .)
+            echo "Deploying reminders-$fn"
+            aws lambda update-function-code \
+              --function-name "reminders-$fn" \
+              --zip-file "fileb://$fn.zip"
+          done
