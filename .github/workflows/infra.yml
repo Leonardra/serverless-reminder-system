@@ -1,0 +1,32 @@
+name: infra
+on:
+  pull_request:
+    paths: ["infra/**", ".github/workflows/infra.yml"]
+  push:
+    branches: [main]
+    paths: ["infra/**", ".github/workflows/infra.yml"]
+permissions:
+  id-token: write
+  contents: read
+env:
+  TF_VAR_site_bucket: ${{ vars.SITE_BUCKET }}
+  TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-north-1
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform init
+      - run: terraform fmt -check
+      - run: terraform validate
+      - run: terraform plan -out=tfplan
+      - if: github.event_name == 'push'
+        run: terraform apply -auto-approve tfplan
