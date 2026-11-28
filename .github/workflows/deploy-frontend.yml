@@ -1,0 +1,33 @@
+name: deploy-frontend
+on:
+  pull_request:
+    paths: ["frontend/**", ".github/workflows/deploy-frontend.yml"]
+  push:
+    branches: [main]
+    paths: ["frontend/**", ".github/workflows/deploy-frontend.yml"]
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the API placeholder is present
+        run: grep -q "__API_URL__" frontend/index.html
+
+      - if: github.event_name == 'push'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-north-1
+
+      - if: github.event_name == 'push'
+        name: Inject API URL and upload to S3
+        run: |
+          URL=$(aws lambda get-function-url-config --function-name reminders-http \
+                --query FunctionUrl --output text)
+          sed -i "s#__API_URL__#${URL}#" frontend/index.html
+          aws s3 sync frontend/ "s3://${{ vars.SITE_BUCKET }}" --delete
+          echo "Site: http://${{ vars.SITE_BUCKET }}.s3-website.eu-north-1.amazonaws.com"

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Serverless Reminders</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; color: #222; }
+    h1 { margin-bottom: 4px; }
+    form { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0 8px; }
+    input[type=text] { flex: 1 1 240px; }
+    input, button { padding: 8px; font-size: 1rem; }
+    #status { min-height: 1.4em; font-size: .9rem; }
+    .error { color: #b00020; } .ok { color: #1b7f3b; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 10px 0; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; gap: 12px; }
+    .when { color: #666; font-size: .9rem; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <h1>Reminders</h1>
+  <p>Add a reminder; you'll get an email when it's due.</p>
+
+  <form id="form">
+    <input id="message" type="text" placeholder="What should I remind you about?" maxlength="500" required>
+    <input id="due" type="datetime-local" required>
+    <button type="submit">Add</button>
+  </form>
+  <div id="status"></div>
+
+  <h2>Upcoming and sent</h2>
+  <ul id="list"></ul>
+  <button id="more" hidden>Load more</button>
+
+<script>
+const API = "__API_URL__";   // replaced by the deploy pipeline
+let nextToken = null;
+
+function setStatus(text, cls) {
+  const el = document.getElementById("status");
+  el.textContent = text;
+  el.className = cls || "";
+}
+
+function render(items, append) {
+  const list = document.getElementById("list");
+  if (!append) list.replaceChildren();
+  items.sort((a, b) => a.due_at.localeCompare(b.due_at)).forEach(item => {
+    const li = document.createElement("li");
+    const msg = document.createElement("span");
+    msg.textContent = (item.sent ? "✅ " : "⏳ ") + item.message;   // textContent = no HTML injection
+    const when = document.createElement("span");
+    when.className = "when";
+    when.textContent = new Date(item.due_at).toLocaleString();
+    li.append(msg, when);
+    list.append(li);
+  });
+}
+
+async function load(append = false) {
+  try {
+    const url = append && nextToken ? `${API}?next=${encodeURIComponent(nextToken)}` : API;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    nextToken = data.next;
+    render(data.items, append);
+    document.getElementById("more").hidden = !nextToken;
+  } catch (e) {
+    setStatus("Could not load reminders: " + e.message, "error");
+  }
+}
+
+document.getElementById("form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const message = document.getElementById("message").value;
+  const local = document.getElementById("due").value;
+  const due_at = new Date(local).toISOString();   // local time -> UTC with 'Z'
+  setStatus("Saving…");
+  try {
+    const res = await fetch(API, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message, due_at })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    setStatus("Reminder saved.", "ok");
+    e.target.reset();
+    load();
+  } catch (err) {
+    setStatus(err.message, "error");
+  }
+});
+
+document.getElementById("more").addEventListener("click", () => load(true));
+load();
+</script>
+</body>
+</html>
