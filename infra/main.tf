@@ -189,3 +189,64 @@ resource "aws_s3_bucket_policy" "site" {
 
 output "function_url" { value = aws_lambda_function_url.http.function_url }
 output "website_url" { value = "http://${aws_s3_bucket_website_configuration.site.website_endpoint}" }
+
+# ---------- Monitoring ----------
+# Separate topic so alerts go to the operator, not to reminder recipients
+resource "aws_sns_topic" "alerts" { name = "reminders-alerts" }
+
+resource "aws_sns_topic_subscription" "alerts_email" {
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+
+# 1. Timer function crashed -> reminders may not be sent
+resource "aws_cloudwatch_metric_alarm" "timer_errors" {
+  alarm_name          = "reminders-timer-errors"
+  alarm_description   = "The timer function failed; due reminders may not be sent."
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  dimensions          = { FunctionName = aws_lambda_function.timer.function_name }
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+}
+
+# 2. HTTP function crashed -> users cannot add or list reminders
+resource "aws_cloudwatch_metric_alarm" "http_errors" {
+  alarm_name          = "reminders-http-errors"
+  alarm_description   = "The HTTP function returned errors; the web page may be broken."
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  dimensions          = { FunctionName = aws_lambda_function.http.function_name }
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+}
+
+# 3. Heartbeat: the timer has stopped running at all (e.g. schedule disabled)
+resource "aws_cloudwatch_metric_alarm" "timer_not_running" {
+  alarm_name          = "reminders-timer-not-running"
+  alarm_description   = "The timer has not run in 15 minutes; the schedule may be broken."
+  namespace           = "AWS/Lambda"
+  metric_name         = "Invocations"
+  dimensions          = { FunctionName = aws_lambda_function.timer.function_name }
+  statistic           = "Sum"
+  period              = 900
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "LessThanThreshold"
+  treat_missing_data  = "breaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+}
