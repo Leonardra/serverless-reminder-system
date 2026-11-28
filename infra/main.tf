@@ -39,7 +39,7 @@ resource "aws_sns_topic_subscription" "email" {
 
 # ---------- IAM role for the Lambdas ----------
 resource "aws_iam_role" "lambda" {
-  name = "reminders-lambda"   # must start with reminders- (matches the pipeline's policy)
+  name = "reminders-lambda" # must start with reminders- (matches the pipeline's policy)
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -181,4 +181,4 @@ resource "aws_s3_bucket_policy" "site" {
 }
 
 output "function_url" { value = aws_lambda_function_url.http.function_url }
-output "website_url"  { value = "http://${aws_s3_bucket_website_configuration.site.website_endpoint}" }
+output "website_url" { value = "http://${aws_s3_bucket_website_configuration.site.website_endpoint}" }
