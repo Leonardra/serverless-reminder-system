@@ -74,7 +74,7 @@ resource "aws_iam_role_policy" "app" {
   })
 }
 
-# ---------- Lambdas (placeholder code; the deploy pipeline uploads real code) ----------
+
 data "archive_file" "placeholder" {
   type        = "zip"
   output_path = "${path.module}/placeholder.zip"
@@ -112,12 +112,11 @@ resource "aws_lambda_function" "timer" {
   lifecycle { ignore_changes = [filename, source_code_hash] }
 }
 
-# ---------- HTTP trigger ----------
 resource "aws_lambda_function_url" "http" {
   function_name      = aws_lambda_function.http.function_name
   authorization_type = "NONE"
   cors {
-    allow_origins = ["*"]
+    allow_origins = ["http://${aws_s3_bucket_website_configuration.site.website_endpoint}"]
     allow_methods = ["GET", "POST"]
     allow_headers = ["content-type"]
   }
